@@ -34,7 +34,7 @@ Issues = "https://github.com/YeFengLeaf/skill-runtime/issues"
 skill-runtime = "skill_runtime.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["skill_runtime*", "examples*"]
+include = ["skill_runtime*"]
 
 [tool.setuptools.package-data]
-examples = ["skills/*/SKILL.md"]
+skill_runtime = ["examples/skills/*/SKILL.md"]

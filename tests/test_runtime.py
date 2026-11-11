@@ -13,7 +13,7 @@ from skill_runtime.runtime import SkillRuntime
 
 
 ROOT = Path(__file__).parent.parent
-SKILLS = ROOT / "examples" / "skills"
+SKILLS = ROOT / "skill_runtime" / "examples" / "skills"
 
 
 class RuntimeTests(unittest.TestCase):
@@ -286,7 +286,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(data["comparison"]["old_skill_present_in_ephemeral_request"])
         self.assertTrue(data["comparison"]["old_skill_present_in_append_request"])
 
-    def test_default_skills_path_uses_examples_beside_package_from_other_cwd(self):
+    def test_default_skills_path_uses_bundled_examples_from_other_cwd(self):
         original_cwd = Path.cwd()
         with tempfile.TemporaryDirectory() as directory:
             unrelated_examples = Path(directory) / "examples" / "skills"

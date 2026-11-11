@@ -12,11 +12,8 @@ from .runtime import SkillRuntime
 
 
 def _default_skills_path() -> Path:
-    """Use examples shipped beside this source tree or installed package."""
-    packaged_path = Path(__file__).resolve().parent.parent / "examples" / "skills"
-    if packaged_path.is_dir():
-        return packaged_path
-    return Path("examples/skills")
+    """Use the example skills bundled inside this package."""
+    return Path(__file__).resolve().parent / "examples" / "skills"
 
 
 def main(argv: list[str] | None = None) -> int:

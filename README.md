@@ -22,10 +22,10 @@
 需要 Python 3.9+，无运行时第三方依赖。
 
 ```bash
-python -m skill_runtime --skills examples/skills index
-python -m skill_runtime --skills examples/skills route "research current facts and cite sources" --skill-budget-tokens 2000
-python -m skill_runtime --skills examples/skills run "clean this csv and inspect missing values" --task-id demo --turn 0 --skill-budget-tokens 2000
-python -m skill_runtime --skills examples/skills demo
+python -m skill_runtime index
+python -m skill_runtime route "research current facts and cite sources" --skill-budget-tokens 2000
+python -m skill_runtime run "clean this csv and inspect missing values" --task-id demo --turn 0 --skill-budget-tokens 2000
+python -m skill_runtime demo
 python -m unittest discover -s tests -v
 ```
 
@@ -36,7 +36,7 @@ python -m pip install .
 skill-runtime run "review the code for regressions"
 ```
 
-未传入 `--skills` 时，CLI 使用随源码或发行包提供的示例技能目录，与当前工作目录无关。指定其他目录时使用全局参数 `--skills PATH`。
+未传入 `--skills` 时，CLI 使用随源码或发行包提供的示例技能目录，与当前工作目录无关。指定其他目录时使用全局参数 `--skills PATH`，例如 `python -m skill_runtime --skills /path/to/skills index`。
 
 ## 设计边界
 
