@@ -36,6 +36,8 @@ python -m pip install .
 skill-runtime run "review the code for regressions"
 ```
 
+未传入 `--skills` 时，CLI 使用随源码或发行包提供的示例技能目录，与当前工作目录无关。指定其他目录时使用全局参数 `--skills PATH`。
+
 ## 设计边界
 
 这是 runtime/context adapter，不是 skill marketplace，也不负责下载外部仓库或执行 skill 脚本。默认 `skill_budget_tokens=2000` 是保守示例值，且只限制选中的 skill 正文估算，不限制基线消息、任务文本或包装文本；正文较长的 skill 可能因此没有候选，调用方应按实际上下文容量调整。完整请求 token 数目前是单独估算。两项估算都按约 4 字符一个 token，不等同于特定模型 tokenizer；接入模型 API 时应把 `RequestEnvelope.messages` 交给该 API 的真实 tokenizer 再记录一次。

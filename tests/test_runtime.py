@@ -2,12 +2,13 @@ from pathlib import Path
 from contextlib import redirect_stdout
 import io
 import json
+import os
 import tempfile
 import unittest
 
 from skill_runtime.catalog import CatalogError, SkillCatalog
 from skill_runtime.context import ContextAdapter, ContextMode
-from skill_runtime.cli import main
+from skill_runtime.cli import _default_skills_path, main
 from skill_runtime.runtime import SkillRuntime
 
 
@@ -284,6 +285,25 @@ class RuntimeTests(unittest.TestCase):
         self.assertGreater(data["comparison"]["next_turn_chars_saved"], 0)
         self.assertFalse(data["comparison"]["old_skill_present_in_ephemeral_request"])
         self.assertTrue(data["comparison"]["old_skill_present_in_append_request"])
+
+    def test_default_skills_path_uses_examples_beside_package_from_other_cwd(self):
+        original_cwd = Path.cwd()
+        with tempfile.TemporaryDirectory() as directory:
+            unrelated_examples = Path(directory) / "examples" / "skills"
+            unrelated_examples.mkdir(parents=True)
+            (unrelated_examples / "unrelated.txt").write_text("not a skill", encoding="utf-8")
+            try:
+                os.chdir(directory)
+                self.assertEqual(_default_skills_path(), SKILLS.resolve())
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(main(["index"]), 0)
+                records = json.loads(output.getvalue())
+                self.assertEqual({Path(record["path"]).parent.name for record in records}, {
+                    "code-review", "data-cleaning", "web-research"
+                })
+            finally:
+                os.chdir(original_cwd)
 
 
 if __name__ == "__main__":

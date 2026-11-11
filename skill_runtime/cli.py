@@ -12,12 +12,11 @@ from .runtime import SkillRuntime
 
 
 def _default_skills_path() -> Path:
-    """Use checkout examples first, then the copy bundled in an install."""
-    checkout_path = Path("examples/skills")
-    if checkout_path.is_dir():
-        return checkout_path
+    """Use examples shipped beside this source tree or installed package."""
     packaged_path = Path(__file__).resolve().parent.parent / "examples" / "skills"
-    return packaged_path if packaged_path.is_dir() else checkout_path
+    if packaged_path.is_dir():
+        return packaged_path
+    return Path("examples/skills")
 
 
 def main(argv: list[str] | None = None) -> int:
