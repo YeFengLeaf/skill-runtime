@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skill-runtime"
+version = "0.1.0"
+description = "A small, observable runtime for routing and releasing Agent Skills per task."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{name = "Skill Runtime contributors"}]
+keywords = ["agent-skills", "context-management", "llm", "routing"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/YeFengLeaf/skill-runtime"
+Repository = "https://github.com/YeFengLeaf/skill-runtime"
+Issues = "https://github.com/YeFengLeaf/skill-runtime/issues"
+
+[project.scripts]
+skill-runtime = "skill_runtime.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["skill_runtime*"]
