@@ -154,6 +154,26 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(result.active_skills, ("shared@one", "unique"))
             self.assertEqual(len({name.split("@", 1)[0] for name in result.active_skills}), 2)
 
+    def test_budget_rejected_duplicate_does_not_block_cheaper_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for folder, body in (("aaa-heavy", "x" * 400), ("bbb-light", "Tiny.")):
+                skill = root / folder / "SKILL.md"
+                skill.parent.mkdir()
+                skill.write_text(
+                    "---\nname: shared\ndescription: A duplicated sample.\ntriggers: [common]\n---\n\n"
+                    + body
+                    + "\n",
+                    encoding="utf-8",
+                )
+            catalog = SkillCatalog.from_directory(root)
+            tokens = {record.key: record.estimated_tokens for record in catalog}
+            self.assertEqual(tokens, {"shared@aaa-heavy": 108, "shared@bbb-light": 10})
+            plan = SkillRuntime(catalog).router.route("common", skill_budget_tokens=20)
+            self.assertEqual([item.skill.key for item in plan.selected], ["shared@bbb-light"])
+            self.assertEqual(len(plan.selected), 1)
+            self.assertLessEqual(plan.estimated_tokens, 20)
+
     def test_block_list_frontmatter_preserves_triggers(self):
         with tempfile.TemporaryDirectory() as directory:
             skill = Path(directory) / "listed" / "SKILL.md"

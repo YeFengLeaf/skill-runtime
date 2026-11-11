@@ -32,8 +32,8 @@ python -m unittest discover -s tests -v
 也可以安装为命令：
 
 ```bash
-python -m pip install -e .
-skill-runtime --skills examples/skills run "review the code for regressions"
+python -m pip install .
+skill-runtime run "review the code for regressions"
 ```
 
 ## 设计边界
@@ -60,4 +60,4 @@ MIT
 
 ## 项目状态
 
-版本、已知限制和开发约定分别见 [CHANGELOG.md](CHANGELOG.md)、[设计边界](#设计边界) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。安全联系渠道将在 GitHub 仓库启用后补充为平台的私密漏洞报告入口。
+版本、已知限制和开发约定分别见 [CHANGELOG.md](CHANGELOG.md)、[设计边界](#设计边界)、[CONTRIBUTING.md](CONTRIBUTING.md) 和 [安全披露说明](SECURITY.md)。

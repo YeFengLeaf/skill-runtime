@@ -90,7 +90,6 @@ class Router:
             if candidate.skill.name in seen_names:
                 rejected.append(candidate)
                 continue
-            seen_names.add(candidate.skill.name)
             if candidate.score < self.threshold:
                 rejected.append(candidate)
                 continue
@@ -98,6 +97,9 @@ class Router:
                 rejected.append(candidate)
                 continue
             selected.append(candidate)
+            # Reserve the name only once the skill is actually selected: a
+            # duplicate rejected for budget must not block a cheaper copy.
+            seen_names.add(candidate.skill.name)
             used_tokens += candidate.estimated_tokens
         reason = "matched" if selected else "no candidate met threshold and budget"
         return RoutePlan(task, skill_budget_tokens, tuple(selected), tuple(rejected), reason)

@@ -11,9 +11,18 @@ from .context import ContextAdapter, ContextMode
 from .runtime import SkillRuntime
 
 
+def _default_skills_path() -> Path:
+    """Use checkout examples first, then the copy bundled in an install."""
+    checkout_path = Path("examples/skills")
+    if checkout_path.is_dir():
+        return checkout_path
+    packaged_path = Path(__file__).resolve().parent.parent / "examples" / "skills"
+    return packaged_path if packaged_path.is_dir() else checkout_path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="skill-runtime")
-    parser.add_argument("--skills", default="examples/skills", type=Path)
+    parser.add_argument("--skills", default=_default_skills_path(), type=Path)
     parser.add_argument("--mode", choices=[item.value for item in ContextMode], default=ContextMode.EPHEMERAL_SYSTEM.value)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("index")
