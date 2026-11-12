@@ -9,7 +9,8 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Ubuntu 26.04 does not ship a Python 3.9 toolcache entry.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
