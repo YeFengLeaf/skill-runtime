@@ -124,6 +124,47 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result.context.request.text.count('<skill name="web-research">'), 1)
         self.assertEqual(result.status, "active")
 
+    def test_history_append_preexisting_base_block_is_reported_as_residual(self):
+        with tempfile.TemporaryDirectory() as directory:
+            skill = Path(directory) / "alpha" / "SKILL.md"
+            skill.parent.mkdir()
+            skill.write_text(
+                "---\nname: alpha\ndescription: A helper.\ntriggers: [alpha]\n---\n\nAlpha body.\n",
+                encoding="utf-8",
+            )
+            block = '<skill name="alpha">\nAlpha body.\n</skill>'
+            adapter = ContextAdapter(
+                base_messages=(
+                    {"role": "system", "content": "Base.\n<active_skills>\n" + block + "\n</active_skills>"},
+                ),
+                mode=ContextMode.HISTORY_APPEND,
+            )
+            runtime = SkillRuntime(SkillCatalog.from_directory(directory), adapter)
+            first = runtime.run_turn("alpha", task_id="seeded", turn=0)
+            self.assertEqual(first.status, "active")
+            self.assertEqual(first.context.residual_skills, ())
+            self.assertEqual(first.context.request.text.count('<skill name="alpha">'), 1)
+            second = runtime.run_turn("zzxy unmatched", task_id="seeded", turn=1)
+            self.assertEqual(second.route_status, "no_match")
+            self.assertEqual(second.context.residual_skills, ("alpha",))
+            self.assertEqual(second.status, "logical_unload_only")
+            self.assertIn(block, second.context.request.text)
+
+    def test_tool_prompt_reports_block_level_physical_removal(self):
+        runtime = SkillRuntime(
+            SkillCatalog.from_directory(SKILLS),
+            ContextAdapter(mode=ContextMode.TOOL_PROMPT),
+        )
+        first = runtime.run_turn("research current facts and cite sources", task_id="a", turn=0)
+        second = runtime.run_turn("clean this csv and inspect missing values", task_id="b", turn=0)
+        third = runtime.run_turn("zzxy unmatched", task_id="c", turn=0)
+        self.assertIn('<skill name="web-research">', first.context.request.text)
+        self.assertEqual(second.context.physically_removed_skills, ("web-research",))
+        self.assertNotIn('<skill name="web-research">', second.context.request.text)
+        self.assertEqual(third.context.physically_removed_skills, ("data-cleaning",))
+        self.assertNotIn('<skill name="data-cleaning">', third.context.request.text)
+        self.assertEqual(third.context.residual_skills, ())
+
     def test_expired_lease_still_selected_is_renewed_without_release(self):
         catalog = SkillCatalog.from_directory(SKILLS)
         runtime = SkillRuntime(catalog)

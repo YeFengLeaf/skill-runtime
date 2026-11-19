@@ -51,12 +51,11 @@ class ContextAdapter:
         self._history = list(self.base_messages)
         self._last_injected: tuple[str, ...] = ()
         self._last_blocks: dict[str, str] = {}
-        self._history_bodies: dict[str, set[str]] = {}
+        self._history_blocks: dict[str, set[str]] = {}
 
     def build(self, skills: Iterable[tuple[SkillRecord, str]], turn: int, user_task: str = "") -> ContextSnapshot:
         loaded = tuple(skills)
         names = tuple(record.key for record, _ in loaded)
-        current_bodies = {record.key: body for record, body in loaded}
         current_blocks = {record.key: _render_skill_block(record, body) for record, body in loaded}
         skill_text = _render_skills(loaded)
         removed = tuple(name for name in self._last_injected if name not in names)
@@ -81,9 +80,14 @@ class ContextAdapter:
                     "role": "developer",
                     "content": "<active_skills>\n" + "\n".join(new_blocks) + "\n</active_skills>",
                 })
-                for record, body in loaded:
-                    if body and current_blocks[record.key] in new_blocks:
-                        self._history_bodies.setdefault(record.key, set()).add(body)
+            # A block can already be present in base_messages or in history even
+            # when this turn appends nothing. Record every rendered block that
+            # occupies the append-only history so a later no-match turn can
+            # still report it as residual.
+            for record, _ in loaded:
+                block = current_blocks[record.key]
+                if block and _contains_skill_block(self._history, block):
+                    self._history_blocks.setdefault(record.key, set()).add(block)
             messages_before_task = tuple(self._history)
         if user_task:
             messages = (*messages_before_task, {"role": "user", "content": user_task})
@@ -102,11 +106,11 @@ class ContextAdapter:
             name for name in removed
             if self._last_blocks.get(name) and self._last_blocks[name] not in request_before_task
         )
-        # Residual counts older copies that are still in append-only history and
-        # are not the body currently injected for that skill.
+        # Residual counts any rendered block still present in append-only
+        # history that is not the block currently injected for that skill.
         residual = tuple(sorted(
-            name for name, bodies in self._history_bodies.items()
-            if any(body != current_bodies.get(name) for body in bodies)
+            name for name, blocks in self._history_blocks.items()
+            if any(block != current_blocks.get(name) for block in blocks)
         )) if self.mode is ContextMode.HISTORY_APPEND else ()
         self._last_injected = names
         self._last_blocks = current_blocks
