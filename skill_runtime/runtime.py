@@ -58,14 +58,17 @@ class SkillRuntime:
             max_skills,
             budget_tokens=budget_tokens,
         )
-        selected_keys = {candidate.skill.key for candidate in plan.selected}
-        released = self.leases.reconcile(task_id, selected_keys, turn)
+        # Preserve router ranking: top-k order controls prompt priority and
+        # telemetry, so a set or an alphabetical sort would lose information.
+        selected_keys = tuple(dict.fromkeys(candidate.skill.key for candidate in plan.selected))
+        released = self.leases.reconcile(task_id, set(selected_keys), turn)
         for candidate in plan.selected:
             self.leases.acquire(candidate.skill.key, task_id, turn, ttl_turns)
-        loaded = tuple(
-            (self.catalog.get_by_key(key), self.catalog.get_by_key(key).read_body())
-            for key in sorted(selected_keys)
-        )
-        context = self.context.build(loaded, turn, task)
-        active = tuple(lease.skill_name for lease in self.leases.active(task_id))
+        loaded = []
+        for key in selected_keys:
+            record = self.catalog.get_by_key(key)
+            loaded.append((record, record.read_body()))
+        context = self.context.build(tuple(loaded), turn, task)
+        active_names = {lease.skill_name for lease in self.leases.active(task_id)}
+        active = tuple(name for name in selected_keys if name in active_names)
         return TurnResult(task_id, turn, plan, context, released, active)

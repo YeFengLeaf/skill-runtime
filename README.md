@@ -6,15 +6,15 @@
 
 ## 当前能力
 
-- 读取本地 `SKILL.md` 的常见 frontmatter（`name`、`description`、`triggers`、`tags` 等），支持内联列表和缩进的标量列表。路由字段 `triggers` 和 `tags` 遇到不支持的嵌套 YAML 会明确报错；其他嵌套元数据保留为不参与调度的文本。索引阶段计算哈希和大小，但不把 skill 正文注入模型请求；正文只在路由命中、取得租约后才读入请求构建器。
-- 确定性的词法路由：返回候选分数、命中理由、估算 token 和 skill 正文预算拒绝结果。目录中大量重复的通用词会降低权重；任务只包含通用词时，明确声明的 trigger 仍可命中。中文二元词只在连续中文片段内生成，不跨标点拼接。没有达到阈值或预算不足时不会把所有 skill 静默装入上下文。
+- 读取本地 `SKILL.md` 的常见 frontmatter（`name`、`description`、`triggers`、`tags` 等），支持内联列表和缩进的标量列表。路由字段 `triggers` 和 `tags` 遇到不支持的块状嵌套 YAML 会明确报错；flow 风格的内嵌列表或映射目前按字符串保留、不做递归解析；其他嵌套元数据保留为不参与调度的文本。索引阶段会读取文件、计算哈希和正文大小，但不把 skill 正文注入模型请求；正文只在路由命中、取得租约后才交给请求构建器。
+- 确定性的词法路由：返回候选分数、命中理由、估算 token 和 skill 正文预算拒绝结果。目录中大量重复的通用词会降低权重；任务只包含通用词时，明确声明的 trigger 仍可命中。中文二元词只在连续中文片段内生成，不跨标点拼接。没有达到阈值或预算不足时不会把所有 skill 静默装入上下文。选中的 skill 保持路由分数顺序，注入顺序和 `active_skills` 不再按名称重排。
 - 同名 skill 全部保留，并按相对目录生成稳定的 catalog key，例如 `review@team-a`。唯一名称仍可直接通过名称查找；重名查找会明确报歧义，需使用 key。路由时按元数据 `name` 去重，同一个名称最多占一个 `max_skills` 槽位。
-- 短生命周期租约：按任务切换、路由变化和过期轮次释放，并记录释放原因。
+- 短生命周期租约：按任务切换和路由变化释放并记录原因；租约到期而 skill 仍被选中时会就地续租，不会同时报告“已释放”和“仍活跃”。
 - 三种上下文模式：
-  - `ephemeral_system`：每轮由基线消息和当前 skill 重新构造；旧 skill 确实离开新请求时才报告物理移除。
-  - `tool_prompt`：只把当前 skill 作为本轮 developer/tool prompt，不写入历史；同样会检查新请求是否不含旧正文。
-  - `history_append`：模拟只能追加历史的宿主；会明确返回 `logical_unload_only`，不冒充已经回收旧 token。
-- 每次运行返回请求字符数、估算 token、加载/释放 skill 和 SHA-256，便于接入真实宿主后做成本验证。
+  - `ephemeral_system`：每轮由基线消息和当前 skill 重新构造；只有完整的旧 skill 渲染块确实离开新请求时才报告物理移除，任务文本里出现相同正文不会造成误报。
+  - `tool_prompt`：只把当前 skill 作为本轮 developer/tool prompt，不写入历史；同样会检查新请求是否不含旧 skill 块。
+  - `history_append`：模拟只能追加历史的宿主；已经存在的同一 skill 渲染块不会重复追加。历史里仍留有当前未使用的旧副本时返回 `logical_unload_only`，不冒充已经回收旧 token。
+- 每次运行返回请求字符数、估算 token、加载/释放 skill；目录索引返回每个 skill 的 SHA-256。这些字段便于接入真实宿主后做成本验证。
 - `demo` 在相同的两项任务上并排比较每轮重建与追加历史，显示第二轮请求差值和旧正文是否仍在请求中。
 
 ## 运行
@@ -45,6 +45,8 @@ skill-runtime run "review the code for regressions"
 路由只做词法匹配，不翻译任务或元数据。中文任务不会自动命中只有英文触发词的 skill，反之亦然；需要跨语言召回时，应在 skill 元数据中显式提供对应语言的触发词，或在宿主侧增加翻译/语义检索层。
 
 `history_append` 的行为是有意保守的：管理器可以释放自己的活动集合，但如果宿主已经把正文写进不可变聊天历史，就无法声称这些 token 已被删除。只有每轮重建请求或宿主提供 history compaction 时，`physically_removed` 才有意义。
+
+租约在 `acquired_turn + ttl_turns` 这一轮视为到期；如果该 skill 仍被选中，会在原位置续租且不产生释放事件；如果不再被选中，则按 `route_changed` 释放。这样 `released` 不会与 `active_skills` 同时声称同一个 skill 已被释放又仍在使用。
 
 ## MVP 验收对应关系
 

@@ -9,6 +9,7 @@ import unittest
 from skill_runtime.catalog import CatalogError, SkillCatalog
 from skill_runtime.context import ContextAdapter, ContextMode
 from skill_runtime.cli import _default_skills_path, main
+from skill_runtime.lease import LeaseManager
 from skill_runtime.runtime import SkillRuntime
 
 
@@ -95,6 +96,90 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result.status, "logical_unload_only")
         self.assertFalse(result.context.physically_removed)
         self.assertIn("<skill name=\"web-research\">", result.context.request.text)
+
+    def test_history_append_reselection_does_not_duplicate_the_same_block(self):
+        runtime = SkillRuntime(
+            SkillCatalog.from_directory(SKILLS),
+            ContextAdapter(mode=ContextMode.HISTORY_APPEND),
+        )
+        runtime.run_turn("research current facts and cite sources", task_id="a", turn=0)
+        runtime.run_turn("zzxy-unmatched-task", task_id="b", turn=1)
+        result = runtime.run_turn("research current facts and cite sources", task_id="c", turn=2)
+        self.assertEqual(result.context.request.text.count('<skill name="web-research">'), 1)
+        self.assertEqual(result.context.injected_skills, ("web-research",))
+        self.assertEqual(result.context.residual_skills, ())
+        self.assertEqual(result.status, "active")
+
+    def test_history_append_repeated_selection_keeps_one_copy(self):
+        runtime = SkillRuntime(
+            SkillCatalog.from_directory(SKILLS),
+            ContextAdapter(mode=ContextMode.HISTORY_APPEND),
+        )
+        for turn in range(3):
+            result = runtime.run_turn(
+                "research current facts and cite sources",
+                task_id="same",
+                turn=turn,
+            )
+        self.assertEqual(result.context.request.text.count('<skill name="web-research">'), 1)
+        self.assertEqual(result.status, "active")
+
+    def test_expired_lease_still_selected_is_renewed_without_release(self):
+        catalog = SkillCatalog.from_directory(SKILLS)
+        runtime = SkillRuntime(catalog)
+        runtime.run_turn("research current facts and cite sources", task_id="same", turn=0, ttl_turns=1)
+        result = runtime.run_turn("research current facts and cite sources", task_id="same", turn=2, ttl_turns=1)
+        self.assertEqual(result.active_skills, ("web-research",))
+        self.assertFalse(any(event.reason == "expired" for event in result.released))
+        self.assertIn('<skill name="web-research">', result.context.request.text)
+        self.assertEqual(result.status, "active")
+
+        manager = LeaseManager(catalog)
+        manager.acquire("web-research", "same", 0, ttl_turns=1)
+        self.assertEqual(manager.active()[0].expires_turn, 1)
+        self.assertEqual(manager.reconcile("same", {"web-research"}, 1), ())
+        self.assertEqual(manager.active()[0].expires_turn, 2)
+
+    def test_physical_removal_uses_the_rendered_block_not_a_body_substring(self):
+        with tempfile.TemporaryDirectory() as directory:
+            skill = Path(directory) / "alpha" / "SKILL.md"
+            skill.parent.mkdir()
+            skill.write_text(
+                "---\nname: alpha\ndescription: A helper.\ntriggers: [alpha]\n---\n\nSHARED BODY\n",
+                encoding="utf-8",
+            )
+            runtime = SkillRuntime(SkillCatalog.from_directory(directory))
+            first = runtime.run_turn("alpha", task_id="first", turn=0)
+            second = runtime.run_turn("SHARED BODY belongs only to the new task", task_id="second", turn=1)
+            self.assertEqual(first.active_skills, ("alpha",))
+            self.assertEqual(second.route_status, "no_match")
+            self.assertNotIn('<skill name="alpha">', second.context.request.text)
+            self.assertTrue(second.context.physically_removed)
+            self.assertEqual(second.context.physically_removed_skills, ("alpha",))
+            self.assertEqual(second.status, "physically_removed")
+
+    def test_injection_and_active_order_follow_router_ranking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            zeta = root / "zeta" / "SKILL.md"
+            zeta.parent.mkdir()
+            zeta.write_text(
+                "---\nname: zeta\ndescription: zeta specialist\ntriggers: [zeta]\n---\n\nZeta body.\n",
+                encoding="utf-8",
+            )
+            alpha = root / "alpha" / "SKILL.md"
+            alpha.parent.mkdir()
+            alpha.write_text(
+                "---\nname: alpha\ndescription: A helper.\ntriggers: [alpha]\n---\n\nAlpha body.\n",
+                encoding="utf-8",
+            )
+            runtime = SkillRuntime(SkillCatalog.from_directory(root))
+            result = runtime.run_turn("zeta alpha", task_id="order", turn=0, budget_tokens=100)
+            self.assertEqual([candidate.skill.key for candidate in result.route.selected], ["zeta", "alpha"])
+            self.assertEqual(result.context.injected_skills, ("zeta", "alpha"))
+            self.assertEqual(result.active_skills, ("zeta", "alpha"))
+            text = result.context.request.text
+            self.assertLess(text.index('<skill name="zeta">'), text.index('<skill name="alpha">'))
 
     def test_malformed_skill_frontmatter_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

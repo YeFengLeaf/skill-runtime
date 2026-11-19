@@ -43,8 +43,12 @@ class LeaseManager:
                 reason = "task_switched"
             elif name not in keep:
                 reason = "route_changed"
-            elif lease.expires_turn < turn:
-                reason = "expired"
+            elif turn >= lease.expires_turn:
+                # The skill is still selected. Renew the lease in place instead
+                # of reporting a release that the same turn immediately undoes.
+                ttl = lease.expires_turn - lease.acquired_turn
+                self._leases[name] = Lease(name, task_id, turn, turn + ttl)
+                continue
             if reason:
                 event = ReleaseEvent(name, lease.task_id, reason, turn)
                 released.append(event)
